@@ -38,6 +38,12 @@ def encode(cellid):
     encoder._VarintEncoder()(output.append, cellid)
     return ''.join(output)
 
+def print_gmaps_dbug(coords):
+    url_string = 'http://maps.googleapis.com/maps/api/staticmap?size=400x400&path='
+    for coord in coords:
+        url_string += '{},{}|'.format(coord['lat'], coord['lng'])
+    print(url_string[:-1])
+
 def startLogger():
     # log format
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(module)10s] [%(levelname)5s] %(message)s')
@@ -100,6 +106,43 @@ def generate_spiral(starting_lat, starting_lng, step_size, step_limit):
         m = m + 1
     return coords
 
+def getNeighbors(origin_lat, origin_lng):
+    origin = CellId.from_lat_lng(LatLng.from_degrees(origin_lat, origin_lng)).parent(15)
+ 
+    walk = [origin.id()]
+  
+    #get the 8 neighboring cells
+    path = [90,180,270,270,0,0,90,90]
+  
+    R = 6379.1 #earth
+    for direction in path:
+        bearing = math.radians(direction)
+        #choose a distance based on direction to get us into the adjoining cell
+        if direction in [0, 180]:
+            distance = 0.305 #approx distance in km from centroid of cell to next NS cell centroid
+        elif direction in [90,270]:
+            distance = 0.213 #approx distance in km from centroid of cell to next EW cell centroid
+
+        lat1 = math.radians(origin_lat)
+        lng1 = math.radians(origin_lng)
+
+        lat2 = math.asin( math.sin(lat1)*math.cos(distance/R) +
+          math.cos(lat1)*math.sin(distance/R)*math.cos(bearing))
+        lng2 = lng1 + math.atan2(math.sin(bearing)*math.sin(distance/R)*math.cos(lat1),
+          math.cos(distance/R)-math.sin(lat1)*math.sin(lat2))
+      
+        lat2 = math.degrees(lat2)
+        lng2 = math.degrees(lng2)
+
+        new_cell = CellId.from_lat_lng(LatLng.from_degrees(lat2, lng2)).parent(15)
+        walk.append(new_cell.id())
+
+        origin_lat = lat2
+        origin_lng = lng2
+  
+    #be sure that whatever walk length is here that you set the length of f2 in the request to be the same
+    return walk
+
 @postpone
 def getSpiralData(lat, lng):
     global API
@@ -111,9 +154,14 @@ def getSpiralData(lat, lng):
         Pokemons = []
         poi = {'pokemons': {}, 'forts': []}
         step_size = 0.0015
-        step_limit = 49
+        step_limit = 20
         coords = generate_spiral(lat, lng, step_size, step_limit)
         first = True
+
+        for c in getNeighbors():
+            cell = CellId(c)
+            
+
         for coord in coords:
             if(first is False):
                 time.sleep(1)
@@ -144,6 +192,7 @@ def getSpiralData(lat, lng):
         if(DEBUG):
             # print('POI dictionary: \n\r{}'.format(pprint.PrettyPrinter(indent=4).pformat(poi)))
             print('POI dictionary: \n\r{}'.format(pprint.PrettyPrinter(indent=4).pformat(Pokemons)))
+            print_gmaps_dbug(coords)
 
 def login(location=None):
     global API
