@@ -1,0 +1,206 @@
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <link rel="shortcut icon" href="static/favicon/favicon.png"/>
+    <style>
+        html { height: 100% }
+        body { height: 100%; margin: 0px; padding: 0px }
+        #map_wrapper {
+            height: 100%;
+        }
+        #map_canvas {
+            width: 100%;
+            height: 100%;
+        }
+        #loader{
+            display:none;
+            top:5px;
+            left:50%;
+            transform: translateX(-50%);
+            
+        }
+        #loader.show{
+            display:block;
+            font-weight:bold;
+        }
+        #loader.green{
+            background-color:#0F0;
+        }
+        #loader.red {
+            background-color:#F00;
+            color:white;
+        }
+        #loader{
+            z-index: 999;
+            position:fixed;
+            font-family: SANS-SERIF;
+            background-color: #fff;
+            border-radius:10px;
+            padding: 20px;
+            opacity: .6;
+        }
+    </style>
+</head>
+<body>
+    <div id="loader">
+        Please wait... searching for pokemon.
+    </div>
+    <div id="map_wrapper">
+        <div id="map_canvas" class="mapping">Detecting location...</div>
+    </div>
+    <script>
+        var firstLoad = true;
+        var player = null;
+        var lastPosition = null;
+        var lastMessage = null;
+        var userLogged = false;
+        var map;
+
+        jQuery(function($) {
+            // Asynchronously Load the map API 
+            var script = document.createElement('script');
+            script.src = '//maps.googleapis.com/maps/api/js?key=AIzaSyBlbg7jyWthMOt9Liasndl34FZh5nwyEJw&callback=initMap';
+            document.body.appendChild(script);
+        });
+
+        function requestLogin(location) {
+            var loc = location.coords.latitude.toString()+', '+location.coords.longitude.toString();
+            $.ajax({ 
+                type: 'POST', 
+                url: '/login', 
+                data: {
+                    location: loc
+                }, 
+                dataType: 'json',
+                success: function (data) {
+                    userLogged = true;
+                    getPokemons();
+                },
+                error: function() {
+                    error('Error while attempting to login');
+                    console.log('Error while attempting to login');
+                }
+            });
+        }
+
+        function getPokemons() {
+            $.ajax({ 
+                type: 'POST', 
+                url: '/getPokes', 
+                dataType: 'json',
+                success: function (data) {
+                    success("YEY");
+                },
+                error: function(e) {
+                    error('Error while fetching Pokémons');
+                    console.log('Error while fetching Pokémons');
+                }
+            });
+        }
+
+        function initMap() {
+            if(firstLoad) {
+                update_position();
+            } else {
+                setInterval(function(){
+                    update_position();	
+                }, 5000);
+            }
+        }
+
+        function build_initial_map(location) {
+            //Your position
+            $('#map_canvas').html('');
+            firstLoad = false;
+            create_map(location);
+            if(!userLogged) {
+                requestLogin(location);
+            } else {
+                getPokemons();
+            }
+        }
+
+        function update_position(){
+            console.log("updating position");
+            navigator.geolocation.getCurrentPosition(update_player,
+                function(){
+                    console.log("failed to get gps location....");
+                }
+            ,{timeout:30000});
+        }
+
+        function update_player(location) {
+            lastPosition = location;
+            var position = new google.maps.LatLng(location.coords.latitude, location.coords.longitude);
+            if(map == null){
+                build_initial_map(location);
+            }
+            if(player === null) {
+                player = add_player(position);
+            } else{
+                player.setPosition(position);
+            }
+        }
+
+        function add_player(position){
+            return add_marker(
+                {
+                    name: 'You',
+                    position: position,
+                    ico:'/static/poke/trainer.gif'
+                }
+            );
+        }
+
+        function add_marker(data){
+            var marker = new google.maps.Marker({
+                position: data.position,
+                map: map,
+                title: data.name,
+                icon: {
+                    url: data.ico
+                }
+            });
+            return marker;
+        }
+
+        function create_map(location) {
+            var mapOptions = {
+                mapTypeId: 'roadmap',
+                center:{
+                    lat:location.coords.latitude, 
+                    lng:location.coords.longitude
+                },
+                zoom: 17
+            };
+            // Display a map on the page
+            map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
+        }
+
+        function info(msg){
+            show_message(msg);
+        }
+
+        function error(msg){
+            show_message(msg, "red");
+        }
+
+        function success(msg){
+            show_message(msg, "green")
+        }
+
+        function show_message(msg, addClass){
+            $("#loader").removeClass("green").removeClass("red").addClass("show");
+            if(addClass !== undefined){
+                $("#loader").addClass(addClass);
+            }
+            if(msg === undefined){
+                msg = 'Searching for Pokémon...';
+            }
+            $("#loader").html(msg);
+        }
+
+        function hide_message(){
+            $("#loader").removeClass("show").removeClass("green").removeClass("red");
+        }
+    </script>
+</body>

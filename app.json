@@ -1,0 +1,17 @@
+{
+  "env": {
+    "IS_HEROKU_SERVER": "1",
+    "GMAPS_API_KEY": "AIzaSyBlbg7jyWthMOt9Liasndl34FZh5nwyEJw",
+    "PTC_USERNAME": "piriquita89",
+    "PTC_PASSWORD": "CenasMaradas",
+    "GOOG_USERNAME": "ptchamp2016",
+    "GOOG_PASSWORD": "CenasMaradas"
+  },
+  "addons": [
+    "papertrail"
+  ],
+  "success_url": "/",
+  "scripts": {
+    "postdeploy": "python manage.py migrate"
+  }
+}
