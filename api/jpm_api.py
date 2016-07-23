@@ -4,10 +4,10 @@ import sys
 import json
 import time
 import struct
-import random
 import requests
-import pprint
 import logging
+import threading
+import math
 
 from threading import Thread
 
@@ -18,11 +18,21 @@ from pgoapi import utilities as util
 from google.protobuf.internal import encoder
 from geopy.geocoders import GoogleV3
 from s2sphere import Cell, CellId, LatLng
+from datetime import datetime
 
-DEBUG = True
 API = None
 FETCHING_DATA = False
+CANCEL_FETCH = False
 Pokemons = []
+Pokestops = []
+POKEMON_DATA = None
+lat_gap_meters = 150
+lng_gap_meters = 86.6
+
+meters_per_degree = 111111
+lat_gap_degrees = float(lat_gap_meters) / meters_per_degree
+pokeSemaphore = threading.BoundedSemaphore()
+stopSemaphore = threading.BoundedSemaphore()
 
 log = logging.getLogger(__name__)
 
@@ -44,193 +54,273 @@ def print_gmaps_dbug(coords):
         url_string += '{},{}|'.format(coord['lat'], coord['lng'])
     print(url_string[:-1])
 
-def startLogger():
+def init():
+    global POKEMON_DATA
+    POKEMON_DATA = json.load(open('api/pokemon.json'))
+
     # log format
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(module)10s] [%(levelname)5s] %(message)s')
+    logging.basicConfig(level=logging.WARNING, format='%(asctime)s [%(module)10s] [%(levelname)5s] %(message)s')
     # log level for http request class
     logging.getLogger("requests").setLevel(logging.WARNING)
     # log level for main pgoapi class
-    logging.getLogger("pgoapi").setLevel(logging.INFO)
+    logging.getLogger("pgoapi").setLevel(logging.WARNING)
     # log level for internal pgoapi class
-    logging.getLogger("rpc_api").setLevel(logging.INFO)
+    logging.getLogger("rpc_api").setLevel(logging.WARNING)
 
 def getLocationByName(locationName):
     geolocator = GoogleV3()
     loc = geolocator.geocode(locationName)
 
-    print('[!] Your given location: {}'.format(loc.address.encode('utf-8')))
-    print('[!] lat/long: {} {}'.format(loc.latitude, loc.longitude))
+    log.info('[!] Your given location: {}'.format(loc.address.encode('utf-8')))
+    log.info('[!] lat/long: {} {}'.format(loc.latitude, loc.longitude))
 
     return (loc.latitude, loc.longitude, loc.altitude)
 
-def get_cell_ids(lat, long, radius = 10):
+def get_cellid(lat, long):
     origin = CellId.from_lat_lng(LatLng.from_degrees(lat, long)).parent(15)
     walk = [origin.id()]
-    right = origin.next()
-    left = origin.prev()
 
-    # Search around provided radius
-    for i in range(radius):
-        walk.append(right.id())
-        walk.append(left.id())
-        right = right.next()
-        left = left.prev()
-
-    # Return everything
+    next = origin.next()
+    prev = origin.prev()
+    for i in range(10):
+        walk.append(prev.id())
+        walk.append(next.id())
+        next = next.next()
+        prev = prev.prev()
     return sorted(walk)
 
+def calculate_lng_degrees(lat):
+    return float(lng_gap_meters) / (meters_per_degree * math.cos(math.radians(lat)))
+
+def generate_location_steps(lat, lng, num_steps):
+    ring = 1 #Which ring are we on, 0 = center
+    lat_location = lat
+    lng_location = lng
+
+    yield (lat,lng, 0) #Middle circle
+
+    while ring < num_steps:
+        #Move the location diagonally to top left spot, then start the circle which will end up back here for the next ring 
+        #Move Lat north first
+        lat_location += lat_gap_degrees
+        lng_location -= calculate_lng_degrees(lat_location)
+
+        for direction in range(6):
+            for i in range(ring):
+                if direction == 0: #Right
+                    lng_location += calculate_lng_degrees(lat_location) * 2
+
+                if direction == 1: #Right Down
+                    lat_location -= lat_gap_degrees
+                    lng_location += calculate_lng_degrees(lat_location)
+
+                if direction == 2: #Left Down
+                    lat_location -= lat_gap_degrees
+                    lng_location -= calculate_lng_degrees(lat_location)
+
+                if direction == 3: #Left
+                    lng_location -= calculate_lng_degrees(lat_location) * 2
+
+                if direction == 4: #Left Up
+                    lat_location += lat_gap_degrees
+                    lng_location -= calculate_lng_degrees(lat_location)
+
+                if direction == 5: #Right Up
+                    lat_location += lat_gap_degrees
+                    lng_location += calculate_lng_degrees(lat_location)
+
+                yield (lat_location, lng_location, 0) #Middle circle
+
+        ring += 1
+
 def get_key_from_pokemon(pokemon):
-    return '{}-{}'.format(pokemon['spawnpoint_id'], pokemon['pokemon_data']['pokemon_id'])
+    return '{}-{}'.format(pokemon['spawnpoint_id'], pokemon['encounter_id'])
 
-def generate_spiral(starting_lat, starting_lng, step_size, step_limit):
-    coords = [{'lat': starting_lat, 'lng': starting_lng}]
-    steps,x,y,d,m = 1, 0, 0, 1, 1
-    rlow = 0.0
-    rhigh = 0.0005
-
-    while steps < step_limit:
-        while 2 * x * d < m and steps < step_limit:
-            x = x + d
-            steps += 1
-            lat = x * step_size + starting_lat + random.uniform(rlow, rhigh)
-            lng = y * step_size + starting_lng + random.uniform(rlow, rhigh)
-            coords.append({'lat': lat, 'lng': lng})
-        while 2 * y * d < m and steps < step_limit:
-            y = y + d
-            steps += 1
-            lat = x * step_size + starting_lat + random.uniform(rlow, rhigh)
-            lng = y * step_size + starting_lng + random.uniform(rlow, rhigh)
-            coords.append({'lat': lat, 'lng': lng})
-
-        d = -1 * d
-        m = m + 1
-    return coords
-
-def getNeighbors(origin_lat, origin_lng):
-    origin = CellId.from_lat_lng(LatLng.from_degrees(origin_lat, origin_lng)).parent(15)
- 
-    walk = [origin.id()]
-  
-    #get the 8 neighboring cells
-    path = [90,180,270,270,0,0,90,90]
-  
-    R = 6379.1 #earth
-    for direction in path:
-        bearing = math.radians(direction)
-        #choose a distance based on direction to get us into the adjoining cell
-        if direction in [0, 180]:
-            distance = 0.305 #approx distance in km from centroid of cell to next NS cell centroid
-        elif direction in [90,270]:
-            distance = 0.213 #approx distance in km from centroid of cell to next EW cell centroid
-
-        lat1 = math.radians(origin_lat)
-        lng1 = math.radians(origin_lng)
-
-        lat2 = math.asin( math.sin(lat1)*math.cos(distance/R) +
-          math.cos(lat1)*math.sin(distance/R)*math.cos(bearing))
-        lng2 = lng1 + math.atan2(math.sin(bearing)*math.sin(distance/R)*math.cos(lat1),
-          math.cos(distance/R)-math.sin(lat1)*math.sin(lat2))
-      
-        lat2 = math.degrees(lat2)
-        lng2 = math.degrees(lng2)
-
-        new_cell = CellId.from_lat_lng(LatLng.from_degrees(lat2, lng2)).parent(15)
-        walk.append(new_cell.id())
-
-        origin_lat = lat2
-        origin_lng = lng2
-  
-    #be sure that whatever walk length is here that you set the length of f2 in the request to be the same
-    return walk
+def send_map_request(api, position):
+    cell_ids = get_cellid(position[0], position[1])
+    timestamps = [0,] * len(cell_ids)
+    try:
+        api.set_position(*position)
+        api.get_map_objects(latitude=f2i(position[0]),
+                            longitude=f2i(position[1]),
+                            since_timestamp_ms = timestamps,
+                            cell_id = cell_ids)
+        return api.call()
+    except Exception as e:
+        log.warn("Uncaught exception when downloading map " + str(e))
+        return False
 
 @postpone
-def getSpiralData(lat, lng):
+def getPoiData(lat, lng):
     global API
     global FETCHING_DATA
     global Pokemons
+    global Pokestops
     if(FETCHING_DATA is False):
         FETCHING_DATA = True
-        print('[+] getting Spiral Data')
+        log.info('[+] getting Data')
         Pokemons = []
-        poi = {'pokemons': {}, 'forts': []}
-        step_size = 0.0015
-        step_limit = 20
-        coords = generate_spiral(lat, lng, step_size, step_limit)
-        first = True
+        Pokestops = []
+        poi = {'pokemons': {}, 'forts': {}}
+        num_steps = 8
+        origin = LatLng.from_degrees(lat, lng)
 
-        for c in getNeighbors():
-            cell = CellId(c)
-            
+        coords = []
 
-        for coord in coords:
-            if(first is False):
-                time.sleep(1)
+        for step, step_location in enumerate(generate_location_steps(lat, lng, num_steps), 1):
+            if(CANCEL_FETCH is not True):
+                log.info('Scanning step {:d} of {:d}.'.format(step, num_steps**2))
+                log.debug('Scan location is {:f}, {:f}'.format(step_location[0], step_location[1]))
+
+                response_dict = {}
+                failed_consecutive = 0
+                while not response_dict and not CANCEL_FETCH:
+                    response_dict = send_map_request(API, step_location)
+                    if response_dict:
+                        try:
+                            if 'status' in response_dict['responses']['GET_MAP_OBJECTS']:
+                                if response_dict['responses']['GET_MAP_OBJECTS']['status'] == 1:
+                                    for map_cell in response_dict['responses']['GET_MAP_OBJECTS']['map_cells']:
+                                        if 'wild_pokemons' in map_cell:
+                                            for pokemon in map_cell['wild_pokemons']:
+                                                pokekey = get_key_from_pokemon(pokemon)
+                                                pos = LatLng.from_degrees(pokemon['latitude'], pokemon['longitude'])
+                                                d_t = datetime.utcfromtimestamp((pokemon['last_modified_timestamp_ms'] + pokemon['time_till_hidden_ms']) / 1000.0)
+                                                if(pokekey not in poi['pokemons']):
+                                                    try:
+                                                        pokeSemaphore.acquire()
+                                                        Pokemons.append({
+                                                            "key": pokekey,
+                                                            "id": pokemon['pokemon_data']['pokemon_id'],
+                                                            "name": POKEMON_DATA[pokemon['pokemon_data']['pokemon_id'] - 1]['Name'],
+                                                            "latitude": pokemon['latitude'],
+                                                            "longitude": pokemon['longitude'],
+                                                            "time_left": pokemon['time_till_hidden_ms']/1000,
+                                                            "hides_at": d_t,
+                                                            "distance": int(origin.get_distance(pos).radians * 6366468.241830914)
+                                                        })
+                                                    finally:
+                                                        pokeSemaphore.release()
+                                                poi['pokemons'][pokekey] = pokemon
+                                        if 'forts' in map_cell:
+                                            for pokestop in map_cell['forts']:
+                                                if pokestop.get('type') == 1 and 'lure_info' in pokestop:  # Pokestops with lure
+                                                    expire_timestamp = pokestop['lure_info']['lure_expires_timestamp_ms'] / 1000.0
+                                                    modified_timestamp = pokestop['last_modified_timestamp_ms'] / 1000.0
+                                                    lure_expiration = datetime.utcfromtimestamp(expire_timestamp)
+                                                    modified = datetime.utcfromtimestamp(modified_timestamp)
+                                                    active_pokemon_id = pokestop['lure_info']['active_pokemon_id']
+                                                    if(pokestop['id'] not in poi['forts']):
+                                                        try:
+                                                            stopSemaphore.acquire()
+                                                            Pokestops.append({
+                                                                "key": pokestop['id'],
+                                                                "pokemon_name": POKEMON_DATA[active_pokemon_id - 1]['Name'],
+                                                                "latitude": pokestop['latitude'],
+                                                                "longitude": pokestop['longitude'],
+                                                                "lure_expiration": lure_expiration,
+                                                                "last_modified": modified
+                                                            })
+                                                        finally:
+                                                            stopSemaphore.release()
+                                                    poi['forts'][pokestop['id']] = pokestop
+                        except KeyError:
+                            log.error('Scan step {:d} failed. Response dictionary key error.'.format(step))
+                            failed_consecutive += 1
+                            if(failed_consecutive >= 5):
+                                log.error('Servers Down. Waiting before trying again')
+                                time.sleep(20)
+                                failed_consecutive = 0
+                    else:
+                        log.warn('Fetch poi data failed. Going again')
+
+                log.info('Completed {:5.2f}% of scan.'.format(float(step) / (3 * (num_steps**2)) - (3 * num_steps) + 1))
+                time.sleep(0.50)
             else:
-                first = False
-
-            lat = coord['lat']
-            lng = coord['lng']
-            API.set_position(lat, lng, 0)
-
-            cell_ids = get_cell_ids(lat, lng)
-            timestamps = [0,] * len(cell_ids)
-            API.get_map_objects(latitude = util.f2i(lat), longitude = util.f2i(lng), since_timestamp_ms = timestamps, cell_id = cell_ids)
-            response_dict = API.call()
-            if 'status' in response_dict['responses']['GET_MAP_OBJECTS']:
-                if response_dict['responses']['GET_MAP_OBJECTS']['status'] == 1:
-                    for map_cell in response_dict['responses']['GET_MAP_OBJECTS']['map_cells']:
-                        if 'wild_pokemons' in map_cell:
-                            for pokemon in map_cell['wild_pokemons']:
-                                pokekey = get_key_from_pokemon(pokemon)
-                                pokemon['hides_at'] = time.time() + pokemon['time_till_hidden_ms']/1000
-                                pokemon['poke_key'] = pokekey
-                                if(pokekey not in poi['pokemons']):
-                                    Pokemons.append(pokemon)
-                                poi['pokemons'][pokekey] = pokemon
-
+                log.info('Canceling Scan to start another')
+                Pokemons = []
+                break
+        
         FETCHING_DATA = False
-        if(DEBUG):
-            # print('POI dictionary: \n\r{}'.format(pprint.PrettyPrinter(indent=4).pformat(poi)))
-            print('POI dictionary: \n\r{}'.format(pprint.PrettyPrinter(indent=4).pformat(Pokemons)))
-            print_gmaps_dbug(coords)
 
 def login(location=None):
     global API
-    startLogger()
+    init()
     API = PGoApi()
 
     position = getLocationByName(location)
     API.set_position(*position)
-    ptc_username = os.environ.get('PTC_USERNAME', "Invalid")
-    ptc_password = os.environ.get('PTC_PASSWORD', "Invalid")
-    login_type = "ptc"
 
-    print('[+] Authentication with ptc...')
-    if not API.login(login_type, ptc_username, ptc_password):
-        print('[-] Trouble logging in via PTC')
-        print('[+] Authentication with Google...')
-        goog_username = os.environ.get('GOOG_USERNAME', "Invalid")
-        goog_password = os.environ.get('GOOG_PASSWORD', "Invalid")
-        login_type = "google"
-        if not API.login(login_type, goog_username, goog_password):
-            log.error("[-] Trouble logging in via Google. Stopping")
+    goog_username = os.environ.get('GOOG_USERNAME', "Invalid")
+    goog_password = os.environ.get('GOOG_PASSWORD', "Invalid")
+
+    login_type = "google"
+
+    log.info('[+] Authentication with Google...')
+    if not API.login(login_type, goog_username, goog_password):
+        log.warn('[-] Trouble logging in via Google')
+        log.info('[+] Authentication with PTC...')
+        ptc_username = os.environ.get('PTC_USERNAME', "Invalid")
+        ptc_password = os.environ.get('PTC_PASSWORD', "Invalid")
+        login_type = "ptc"
+        if not API.login(login_type, ptc_username, ptc_password):
+            log.error("[-] Trouble logging in via PTC. Stopping")
             return False
     
     API.get_player()
     response_dict = API.call()
-    if(DEBUG):
-        print('Response dictionary: \n\r{}'.format(pprint.PrettyPrinter(indent=4).pformat(response_dict)))
     
-    getSpiralData(position[0], position[1])
+    getPoiData(position[0], position[1])
     return True
 
 def getPokemons():
-    global FETCHING_DATA
     global Pokemons
-    if(FETCHING_DATA is False):
-        return Pokemons
-    else:
-        return {}
+    try:
+        pokeSemaphore.acquire()
+        data = Pokemons
+        Pokemons = []
+    finally:
+        pokeSemaphore.release()
 
+    return data
+
+def getLuredStops():
+    global Pokestops
+    try:
+        stopSemaphore.acquire()
+        data = Pokestops
+        Pokestops = []
+    finally:
+        stopSemaphore.release()
+    
+    return data
+
+def hasMoreData():
+    return FETCHING_DATA is True
+
+def rescan(location=None):
+    log.info("Rescaning")
+    global CANCEL_FETCH
+    CANCEL_FETCH = True
+    while FETCHING_DATA:
+        log.debug("Waiting last loop to end")
+        time.sleep(0.5)
+    CANCEL_FETCH = False
+
+    if API._auth_provider and API._auth_provider._ticket_expire:
+        remaining_time = API._auth_provider._ticket_expire/1000 - time.time()
+
+        if remaining_time > 60:
+            log.info("Skipping Pokemon Go login process since already logged in for another {:.2f} seconds".format(remaining_time))
+            position = getLocationByName(location)
+            getPoiData(position[0], position[1])
+        else:
+            login(location)
+    else:
+        login(location)
+
+    return True
+
+    
 if __name__ == '__main__':
     main()
