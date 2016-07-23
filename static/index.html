@@ -325,6 +325,9 @@
                 } else {
                     success("Found " + Object.keys(pokes).length + " pokémon!");
                     setTimeout(function(){
+                        getPokemons();
+                    }, 10000);
+                    setTimeout(function(){
                         hide_message();
                     }, 5000);
                 }
