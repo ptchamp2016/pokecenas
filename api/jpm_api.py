@@ -299,7 +299,9 @@ def getLuredStops():
     return data
 
 def hasMoreData():
-    return FETCHING_DATA is True
+    global FETCHING_DATA
+    
+    return FETCHING_DATA
 
 def rescan(location=None):
     log.info("Rescaning")
