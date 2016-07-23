@@ -400,10 +400,6 @@
         var position = new google.maps.LatLng(location.coords.latitude, location.coords.longitude);
         if(map == null){
             build_initial_map(location);
-        } else {
-            if (mode === "mylocation"){
-                getNewData();
-            }
         }
         if(player === null) {
             player = add_player(position);
