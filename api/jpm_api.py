@@ -237,7 +237,7 @@ def getPoiData(lat, lng):
                     else:
                         log.warn('Fetch poi data failed. Going again')
 
-                log.info('Completed {:5.2f}% of scan.'.format(float(step) / ((3 * (num_steps**2)) - (3 * num_steps) + 1) * 100))
+                log.debug('Completed {:5.2f}% of scan.'.format(float(step) / ((3 * (num_steps**2)) - (3 * num_steps) + 1) * 100))
                 time.sleep(0.20)
             else:
                 log.info('Canceling Scan to start another')
@@ -305,18 +305,21 @@ def hasMoreData():
 
 def rescan(location=None):
     log.info("Rescaning")
-    global CANCEL_FETCH
-    CANCEL_FETCH = True
-    if API._auth_provider and API._auth_provider._ticket_expire:
-        remaining_time = API._auth_provider._ticket_expire/1000 - time.time()
-        if remaining_time > 60:
-            log.info("Skipping Pokemon Go login process since already logged in for another {:.2f} seconds".format(remaining_time))
-            position = getLocationByName(location)
-            getPoiData(position[0], position[1])
+    try:
+        global CANCEL_FETCH
+        CANCEL_FETCH = True
+        if API._auth_provider and API._auth_provider._ticket_expire:
+            remaining_time = API._auth_provider._ticket_expire/1000 - time.time()
+            if remaining_time > 60:
+                log.info("Skipping Pokemon Go login process since already logged in for another {:.2f} seconds".format(remaining_time))
+                position = getLocationByName(location)
+                getPoiData(position[0], position[1])
+            else:
+                login(location)
         else:
             login(location)
-    else:
-        login(location)
+    except Exception as e:
+        log.error(str(e));
 
     return True
 
