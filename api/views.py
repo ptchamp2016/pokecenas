@@ -17,6 +17,9 @@ def load_frontend(request):
         "GMAPS_API_KEY": os.environ.get('GMAPS_API_KEY', "Invalid")
 	})
 
+def load_list(request):
+    return TemplateResponse(request, 'list.html')
+
 def login(request):
     location = request.POST.get('location', "Lisboa, Portugal")
     result = jpm_api.login(location=location)

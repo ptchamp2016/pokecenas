@@ -40,7 +40,7 @@
         opacity: .6;
     }
     #control_panel{
-        width:200px;
+        width:150px;
         left:15px;
         bottom:15px;
     }
@@ -57,8 +57,10 @@
 </div>
 <div id="control_panel">
     <div class="manual-search">
+        <button id="update">Refresh</button>
         <button id="manual_search">Search</button>
-        <br/>
+        <br>
+        <br>
     </div>
     <strong>Search by:</strong><br/>
     <input type="radio" name="searchType" value="mylocation" checked/> My Location<br/>
@@ -88,6 +90,11 @@
         $("#manual_search").on('click', function(){
             getNewData();
         });
+        $("#update").on('click', function(){
+            getPokemons();
+            getPokestops();
+        });
+        
         update_mode();
     });
 
@@ -244,6 +251,19 @@
         delete stops[pokestop.data.uid];
     }
 
+    function clear_markers() {
+        var keys = Object.keys(pokes);
+        for (var i = 0; i < keys.length; i++) {
+            clear_pokemon(pokes[keys[i]]);
+        }
+        pokes = {};
+        keys = Object.keys(stops);
+        for (var i = 0; i < keys.length; i++) {
+            clear_pokestop(stops[keys[i]]);
+        }
+        stops = {};
+    }
+
     function requestLogin(location) {
         var loc = location.coords.latitude.toString()+', '+location.coords.longitude.toString();
         $.ajax({ 
@@ -261,6 +281,9 @@
             },
             error: function(e) {
                 error('Error while attempting to login');
+                setTimeout(function(){
+                    hide_message();
+                }, 3000);
                 console.log('Error while attempting to login');
             }
         });
@@ -283,6 +306,9 @@
             },
             error: function(e) {
                 error('Error while fetching Pokémon');
+                setTimeout(function(){
+                    hide_message();
+                }, 3000);
                 console.log(e);
                 setTimeout(function(){
                     getPokemons();
@@ -303,6 +329,9 @@
             },
             error: function(e) {
                 error('Error while fetching Pokéstops');
+                setTimeout(function(){
+                    hide_message();
+                }, 3000);
                 console.log(e);
                 setTimeout(function(){
                     getPokestops();
@@ -320,13 +349,10 @@
                 if(data.data == true) {
                     setTimeout(function(){
                         getPokemons();
+                        getPokestops();
                     }, 3000);
-                    getPokestops();
                 } else {
                     success("Found " + Object.keys(pokes).length + " pokémon!");
-                    setTimeout(function(){
-                        getPokemons();
-                    }, 10000);
                     setTimeout(function(){
                         hide_message();
                     }, 5000);
@@ -334,6 +360,9 @@
             },
             error: function(e) {
                 error('Error while getting more data');
+                setTimeout(function(){
+                    hide_message();
+                }, 3000);
                 console.log(e);
                 setTimeout(function(){
                     getMoreData();
@@ -366,6 +395,9 @@
             },
             error: function(e) {
                 error('Error while rescaning');
+                setTimeout(function(){
+                    hide_message();
+                }, 3000);
                 console.log(e);
             }
         });
