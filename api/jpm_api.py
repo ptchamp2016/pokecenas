@@ -59,7 +59,7 @@ def init():
     POKEMON_DATA = json.load(open('api/pokemon.json'))
 
     # log format
-    logging.basicConfig(level=logging.WARNING, format='%(asctime)s [%(module)10s] [%(levelname)5s] %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(module)10s] [%(levelname)5s] %(message)s')
     # log level for http request class
     logging.getLogger("requests").setLevel(logging.WARNING)
     # log level for main pgoapi class
@@ -72,7 +72,6 @@ def getLocationByName(locationName):
     loc = geolocator.geocode(locationName)
 
     log.info('[!] Your given location: {}'.format(loc.address.encode('utf-8')))
-    log.info('[!] lat/long: {} {}'.format(loc.latitude, loc.longitude))
 
     return (loc.latitude, loc.longitude, loc.altitude)
 
@@ -169,8 +168,7 @@ def getPoiData(lat, lng):
 
         for step, step_location in enumerate(generate_location_steps(lat, lng, num_steps), 1):
             if(CANCEL_FETCH is not True):
-                log.info('Scanning step {:d} of {:d}.'.format(step, num_steps**2))
-                log.debug('Scan location is {:f}, {:f}'.format(step_location[0], step_location[1]))
+                log.info('Scanning step {:d} of {:d}.'.format(step, (3 * (num_steps**2)) - (3 * num_steps) + 1))
 
                 response_dict = {}
                 failed_consecutive = 0
