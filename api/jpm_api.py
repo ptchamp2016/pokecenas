@@ -306,19 +306,11 @@ def rescan(location=None):
     try:
         global CANCEL_FETCH
         CANCEL_FETCH = True
-        if API._auth_provider and API._auth_provider._ticket_expire:
-            log.info("Ticket= " + API._auth_provider._ticket_expire)
-            remaining_time = API._auth_provider._ticket_expire / 1000 - time.time()
-            if remaining_time > 60:
-                log.info("Skipping Pokemon Go login process since already logged in for another {:.2f} seconds".format(remaining_time))
-                position = getLocationByName(location)
-                getPoiData(position[0], position[1])
-            else:
-                login(location)
-        else:
-            login(location)
+        position = getLocationByName(location)
+        getPoiData(position[0], position[1])
     except Exception as e:
-        log.error("Error HERE" + str(e));
+        log.error("Error rescaning" + str(e));
+        return login(location)
 
     return True
 
