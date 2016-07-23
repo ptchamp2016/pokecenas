@@ -153,8 +153,15 @@ def send_map_request(api, position):
 def getPoiData(lat, lng):
     global API
     global FETCHING_DATA
+    global CANCEL_FETCH
     global Pokemons
     global Pokestops
+
+    while FETCHING_DATA and CANCEL_FETCH:
+        log.info("[!] Waiting last loop to end")
+        time.sleep(0.20)
+    CANCEL_FETCH = False
+
     if(FETCHING_DATA is False):
         FETCHING_DATA = True
         log.info('[+] getting Data')
@@ -168,8 +175,6 @@ def getPoiData(lat, lng):
 
         for step, step_location in enumerate(generate_location_steps(lat, lng, num_steps), 1):
             if(CANCEL_FETCH is not True):
-                log.info('Scanning step {:d} of {:d}.'.format(step, (3 * (num_steps**2)) - (3 * num_steps) + 1))
-
                 response_dict = {}
                 failed_consecutive = 0
                 while not response_dict and not CANCEL_FETCH:
@@ -232,8 +237,8 @@ def getPoiData(lat, lng):
                     else:
                         log.warn('Fetch poi data failed. Going again')
 
-                log.info('Completed {:5.2f}% of scan.'.format(float(step) / (3 * (num_steps**2)) - (3 * num_steps) + 1))
-                time.sleep(0.50)
+                log.info('Completed {:5.2f}% of scan.'.format(float(step) / ((3 * (num_steps**2)) - (3 * num_steps) + 1) * 100))
+                time.sleep(0.20)
             else:
                 log.info('Canceling Scan to start another')
                 Pokemons = []
@@ -243,8 +248,10 @@ def getPoiData(lat, lng):
 
 def login(location=None):
     global API
+    global CANCEL_FETCH
     init()
     API = PGoApi()
+    CANCEL_FETCH = True
 
     position = getLocationByName(location)
     API.set_position(*position)
@@ -300,14 +307,8 @@ def rescan(location=None):
     log.info("Rescaning")
     global CANCEL_FETCH
     CANCEL_FETCH = True
-    while FETCHING_DATA:
-        log.debug("Waiting last loop to end")
-        time.sleep(0.5)
-    CANCEL_FETCH = False
-
     if API._auth_provider and API._auth_provider._ticket_expire:
         remaining_time = API._auth_provider._ticket_expire/1000 - time.time()
-
         if remaining_time > 60:
             log.info("Skipping Pokemon Go login process since already logged in for another {:.2f} seconds".format(remaining_time))
             position = getLocationByName(location)
