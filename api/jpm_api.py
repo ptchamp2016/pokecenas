@@ -288,11 +288,11 @@ def login(location=None):
         return false
 
 def getPokemons():
-    log.info("Getting Pokemon: " + len(Pokemons))
     global Pokemons
     try:
         pokeSemaphore.acquire()
         data = Pokemons
+        log.info("Getting Pokemon: %s", len(data))
         Pokemons = []
     finally:
         pokeSemaphore.release()
@@ -300,11 +300,11 @@ def getPokemons():
     return data
 
 def getLuredStops():
-    log.info("Getting Pokestops: " + len(Pokestops))
     global Pokestops
     try:
         stopSemaphore.acquire()
         data = Pokestops
+        log.info("Getting Pokestops: %s", len(data))
         Pokestops = []
     finally:
         stopSemaphore.release()
