@@ -15,7 +15,7 @@
         height: 100%;
     }
     #loader{
-        top: 10px;
+        bottom: 10px;
         display:none;
         left:50%;
         transform: translateX(-50%);
@@ -23,9 +23,6 @@
     #loader.show{
         display:block;
         font-weight:bold;
-    }
-    #loader.green{
-        background-color:#0F0;
     }
     #loader.red {
         background-color:#F00;
@@ -38,37 +35,36 @@
         background-color: #fff;
         border-radius:10px;
         padding: 15px;
-        opacity: .7;
+        opacity: .6;
     }
     #top_bar {
         z-index: 998;
         position:fixed;
         font-family: SANS-SERIF;
         background-color: #fff;
-        border-radius:10px;
-        padding: 10px;
+        border-radius:8px;
+        padding: 8px;
         opacity: .6;
         left: 10px;
         top: 10px;
     }
     .sidenav {
         height: 100%;
-        width: 0;
+        width: 220px;
         position: fixed;
         z-index: 1;
         top: 0;
-        left: 0;
+        left: -220px;
         background-color: #111;
         overflow-x: hidden;
-        transition: 0.5s;
+        transition: 0.4s;
     }
 
     .sidenav #control_panel {
-        padding: 12px 12px 12px 12px;
+        padding: 70px 12px 12px 12px;
         text-decoration: none;
         font-size: 16px;
         color: #818181;
-        display: block;
         font-family: SANS-SERIF;
     }
 
@@ -108,11 +104,6 @@
 </style>
 <div id="mySidenav" class="sidenav">
     <div id="control_panel">
-        <strong>Search by:</strong><br/>
-        <input type="radio" name="searchType" value="mylocation" checked style="margin-top: 12px"/> My Location<br/>
-        <input type="radio" name="searchType" value="mapcenter" style="margin-top: 12px"/> Map Center<br/>
-        <br>
-        <br>
         <strong>Filters:</strong><br/>
         <div class="switch_container">
             <div class="toggle-button toggle-button-selected" id="show_pokemon_switch">
@@ -137,7 +128,8 @@
     <div id="top_bar">
         <img id="menu_toggle" src="static/site/menu-alt-64.png" width="30" height="30">
         <img id="refresh" src="static/site/reload.png" width="30" height="30" hspace="10">
-        <img id="search" src="static/site/search.png" width="30" height="30">
+        <img id="center_me" src="static/site/position.png" width="30" height="30" style="margin-right:10px;">
+        <img id="clear" src="static/site/clear.png" width="30" height="30">
     </div>
     <div id="map_wrapper">
         <div id="map_canvas" class="mapping">Detecting location...</div>
@@ -151,25 +143,36 @@
     var map;
     var pokes = {};
     var stops = {};
-    var mode = null;
     var pad = function (number) { return number <= 99 ? ("0" + number).slice(-2) : number; }
     var menuOpen = false;
     var showPokemon = true;
     var showPokestop = true;
+    var playerLocation = null;
 
     jQuery(function($) {
         var script = document.createElement('script');
         script.src = '//maps.googleapis.com/maps/api/js?key={{GMAPS_API_KEY}}&sensor=false&callback=initMap';
         document.body.appendChild(script);
-        $("[name='searchType']").on('change', function(){
-            update_mode();
+        
+        $("#menu_toggle").on('click', function(){
+            if(!menuOpen) {
+                $("#mySidenav").css('left', '0');
+                $("#main").css('margin-left','220px');
+                menuOpen = true;
+            } else {
+                $("#mySidenav").css('left', '-220px');
+                $("#main").css('margin-left','0');
+                menuOpen = false;
+            }
         });
-        $("#search").on('click', function(){
-            getNewData();
+        $("#clear").on('click', function(){
+            clear_markers();
         });
         $("#refresh").on('click', function(){
-            getPokemons();
-            getPokestops();
+            getNewData();
+        });
+        $("#center_me").on('click', function(){
+            map.setCenter(new google.maps.LatLng(playerLocation.coords.latitude, playerLocation.coords.longitude));
         });
         $(".toggle-button").on('click', function() {
             $(this).toggleClass('toggle-button-selected'); 
@@ -181,27 +184,7 @@
                 showHidePokestops(showPokestop);
             }
         });
-        $("#menu_toggle").on('click', function(){
-            if(!menuOpen) {
-                $("#mySidenav").width('220px');
-                $("#main").css('margin-left','220px');
-                $("#top_bar").animate({"left":"230px"});
-                hide_message();
-                menuOpen = true;
-            } else {
-                $("#mySidenav").width('0');
-                $("#main").css('margin-left','0');
-                $("#top_bar").animate({"left":"10px"});
-                menuOpen = false;
-            }
-        });
-        
-        update_mode();
     });
-
-    function update_mode(){
-        mode = $("[name='searchType']:checked").val();
-    }
 
     var updateLabelDiffTime = function() {
         $('.label-countdown').each(function(index, element) {
@@ -396,6 +379,7 @@
             success: function (data) {
                 userLogged = true;
                 setTimeout(function(){
+                    hide_message();
                     getPokemons();
                     getPokestops();
                 }, 5000);
@@ -404,8 +388,8 @@
                 error('Error while attempting to login');
                 setTimeout(function(){
                     hide_message();
-                }, 3000);
-                console.log('Error while attempting to login');
+                }, 2000);
+                console.log(e);
             }
         });
     }
@@ -416,22 +400,23 @@
             url: '/getPokes', 
             dataType: 'json',
             success: function (data) {
-                var count = data ? data.data.length : 0;
-                $.each(data.data, function(k, v) {
-                    if(!(v.key in pokes)) {
-                        add_pokemon(v);
-                    }
-                });
-                if (count > 0) {
-                    info("Added " + count + " pokémon!");
+                if(data.data !== true) {
+                    var count = data ? data.data.length : 0;
+                    $.each(data.data, function(k, v) {
+                        if(!(v.key in pokes)) {
+                            add_pokemon(v);
+                        }
+                    });
+                    getMoreData();
+                } else {
+                    getNewData();
                 }
-                getMoreData();
             },
             error: function(e) {
                 error('Error while fetching Pokémon');
                 setTimeout(function(){
                     hide_message();
-                }, 3000);
+                }, 2000);
                 console.log(e);
                 setTimeout(function(){
                     getPokemons();
@@ -475,16 +460,24 @@
          setTimeout(function(){
             getPokemons();
             getPokestops();
-        }, 3000);
+        }, 2000);
     }
 
     function getNewData() {
-        var loc = lastPosition.coords.latitude.toString()+', '+lastPosition.coords.longitude.toString();
-
-        if (mode === "mapcenter"){
-            var position = map.getCenter();
-            loc = position.lat().toString()+', '+position.lng().toString();
-        }
+        var position = map.getCenter();
+        loc = position.lat().toString()+', '+position.lng().toString();
+        var searchMarker = new google.maps.Circle({
+            strokeColor: '#FF0000',
+            strokeOpacity: 0.8,
+            strokeWeight: 1,
+            fillColor: '#FF0000',
+            fillOpacity: 0.25,
+            label:"Searching Area",
+            map: map,
+            center: position,
+            radius: 15
+          });
+        
         info();
         $.ajax({ 
             type: 'POST', 
@@ -495,16 +488,23 @@
             dataType: 'json',
             success: function (data) {
                 setTimeout(function(){
+                    if(searchMarker !== null){
+                       searchMarker.setMap(null);
+                    }
+                    hide_message();
                     getPokemons();
                     getPokestops();
-                }, 10000);
+                }, 5000);
             },
             error: function(e) {
                 error('Error while rescaning');
                 setTimeout(function(){
                     hide_message();
-                }, 3000);
+                }, 2000);
                 console.log(e);
+                if(searchMarker !== null){
+                    searchMarker.setMap(null);
+                }
             }
         });
     }
@@ -521,8 +521,6 @@
         create_map(location);
         if(!userLogged) {
             requestLogin(location);
-        } else {
-            getPokemons();
         }
         info();
     }
@@ -537,13 +535,11 @@
     }
 
     function update_player(location) {
-        lastPosition = location;
         var position = new google.maps.LatLng(location.coords.latitude, location.coords.longitude);
+        playerLocation = location;
         if(map == null){
             build_initial_map(location);
-        } else {
-            getNewData();
-        }
+        } 
         if(player === null) {
             player = add_player(position);
         } else{

@@ -53,7 +53,7 @@ def encode(cellid):
 def print_gmaps_dbug(coords):
     url_string = 'http://maps.googleapis.com/maps/api/staticmap?size=400x400&path='
     for coord in coords:
-        url_string += '{},{}|'.format(coord['lat'], coord['lng'])
+        url_string += '{},{}|'.format(coord[0], coord[1])
     print(url_string[:-1])
 
 def init():
@@ -92,6 +92,17 @@ def get_cellid(lat, long):
 
 def calculate_lng_degrees(lat):
     return float(lng_gap_meters) / (meters_per_degree * math.cos(math.radians(lat)))
+
+# def generate_location_steps(lat, lng, num_steps):
+#     pos, x, y, dx, dy = 1, 0, 0, 0, -1
+
+#     while -num_steps / 2 < x <= num_steps / 2 and -num_steps / 2 < y <= num_steps / 2:
+#         yield (x * 0.00125 + lat, y * 0.00175 + lng, 0)
+
+#         if x == y or (x < 0 and x == -y) or (x > 0 and x == 1 - y):
+#             dx, dy = -dy, dx
+
+#         x, y = x + dx, y + dy
 
 def generate_location_steps(lat, lng, num_steps):
     ring = 1 #Which ring are we on, 0 = center
@@ -160,7 +171,7 @@ def getPoiData(lat, lng):
     global Pokestops
 
     while FETCHING_DATA and CANCEL_FETCH:
-        log.info("[!] Waiting last loop to end")
+        log.info("[!] Waiting previous loop to end")
         time.sleep(0.20)
     CANCEL_FETCH = False
 
@@ -175,7 +186,7 @@ def getPoiData(lat, lng):
         Pokemons = []
         Pokestops = []
         poi = {'pokemons': {}, 'forts': {}}
-        num_steps = 10
+        num_steps = 6
         total_steps = (3 * (num_steps**2)) - (3 * num_steps) + 1
         origin = LatLng.from_degrees(lat, lng)
 
@@ -186,6 +197,7 @@ def getPoiData(lat, lng):
                 response_dict = {}
                 failed_consecutive = 0
                 while not response_dict and not CANCEL_FETCH:
+                    coords.append(step_location)
                     response_dict = send_map_request(API, step_location)
                     if response_dict:
                         try:
@@ -240,11 +252,12 @@ def getPoiData(lat, lng):
                     else:
                         log.warn('Fetch poi data failed. Going again')
                 log.info('Completed {:5.2f}% of scan.'.format(float(step) / total_steps*100))
-                time.sleep(0.20)
+                # log.info('Completed {:5.2f}% of scan.'.format(float(step) / num_steps**2*100))
             else:
                 log.info('Canceling Scan to start another')
                 Pokemons = []
                 break
+        print_gmaps_dbug(coords)
         try:
             fetchSemaphore.acquire()
             FETCHING_DATA = False
@@ -289,15 +302,24 @@ def login(location=None):
 
 def getPokemons():
     global Pokemons
+    global FETCHING_DATA
+    stop = False
     try:
         pokeSemaphore.acquire()
         data = Pokemons
         log.info("Getting Pokemon: %s", len(data))
         Pokemons = []
+        fetchSemaphore.acquire()
+        if not data and FETCHING_DATA is not True:
+            stop = True
     finally:
         pokeSemaphore.release()
-
-    return data
+        fetchSemaphore.release()
+    
+    if stop:
+        return True
+    else:
+        return data
 
 def getLuredStops():
     global Pokestops
