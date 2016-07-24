@@ -311,16 +311,6 @@ def getLuredStops():
     
     return data
 
-def hasMoreData():
-    global FETCHING_DATA
-    result = False
-    try:
-        fetchSemaphore.acquire()
-        result = FETCHING_DATA
-    finally:
-        fetchSemaphore.release()
-    return result is True
-
 def rescan(location=None):
     log.info("Rescaning")
     try:

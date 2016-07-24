@@ -183,14 +183,15 @@
         });
         $("#menu_toggle").on('click', function(){
             if(!menuOpen) {
-                $("#mySidenav").width('250px');
-                $("#main").css('margin-left','250px');
-                $("#top_bar").animate({"left":"260px"});
+                $("#mySidenav").width('220px');
+                $("#main").css('margin-left','220px');
+                $("#top_bar").animate({"left":"230px"});
+                hide_message();
                 menuOpen = true;
             } else {
                 $("#mySidenav").width('0');
                 $("#main").css('margin-left','0');
-                $("#top_bar").animate({"left":"10px"}, "0.5", "linear");
+                $("#top_bar").animate({"left":"10px"});
                 menuOpen = false;
             }
         });
@@ -397,7 +398,7 @@
                 setTimeout(function(){
                     getPokemons();
                     getPokestops();
-                }, 10000);
+                }, 5000);
             },
             error: function(e) {
                 error('Error while attempting to login');
@@ -471,34 +472,10 @@
     }
 
     function getMoreData() {
-        $.ajax({ 
-            type: 'POST', 
-            url: '/moreData', 
-            dataType: 'json',
-            success: function (data) {
-                if(data.data == true) {
-                    setTimeout(function(){
-                        getPokemons();
-                        getPokestops();
-                    }, 3000);
-                } else {
-                    success("Found " + Object.keys(pokes).length + " pokémon!");
-                    setTimeout(function(){
-                        hide_message();
-                    }, 5000);
-                }
-            },
-            error: function(e) {
-                error('Error while getting more data');
-                setTimeout(function(){
-                    hide_message();
-                }, 3000);
-                console.log(e);
-                setTimeout(function(){
-                    getMoreData();
-                }, 5000);
-            }
-        });
+         setTimeout(function(){
+            getPokemons();
+            getPokestops();
+        }, 3000);
     }
 
     function getNewData() {

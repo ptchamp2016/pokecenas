@@ -46,12 +46,6 @@ def getPokestops(request):
             "data": result
         }, default=json_custom_parser), content_type='application/json', status=200)
 
-def hasMoreData(request):
-    return HttpResponse(json.dumps({
-            "status": "success",
-            "data": jpm_api.hasMoreData()
-        }, default=json_custom_parser), content_type='application/json', status=200)
-
 def updateScan(request):
     location = request.POST.get('location', "Lisboa, Portugal")
     
