@@ -16,10 +16,8 @@
     }
     #loader{
         display:none;
-        bottom:5px;
         left:50%;
         transform: translateX(-50%);
-        bottom:15px;
     }
     #loader.show{
         display:block;
@@ -476,7 +474,8 @@
                 lat:location.coords.latitude, 
                 lng:location.coords.longitude
             },
-            zoom: 17
+            zoom: 17,
+            disableDefaultUI: true
         };
         // Display a map on the page
         map = new google.maps.Map(document.getElementById("map_canvas"), mapOptions);
