@@ -252,36 +252,41 @@ def getPoiData(lat, lng):
             fetchSemaphore.release()
 
 def login(location=None):
+    print("login started")
     global API
     global CANCEL_FETCH
     init()
-    API = PGoApi()
-    CANCEL_FETCH = True
+    try:
+        API = PGoApi()
+        CANCEL_FETCH = True
 
-    position = getLocationByName(location)
-    API.set_position(*position)
+        position = getLocationByName(location)
+        API.set_position(*position)
 
-    goog_username = os.environ.get('GOOG_USERNAME', "Invalid")
-    goog_password = os.environ.get('GOOG_PASSWORD', "Invalid")
+        goog_username = os.environ.get('GOOG_USERNAME', "Invalid")
+        goog_password = os.environ.get('GOOG_PASSWORD', "Invalid")
 
-    login_type = "google"
+        login_type = "google"
 
-    log.info('[+] Authentication with Google...')
-    if not API.login(login_type, goog_username, goog_password):
-        log.warn('[-] Trouble logging in via Google')
-        log.info('[+] Authentication with PTC...')
-        ptc_username = os.environ.get('PTC_USERNAME', "Invalid")
-        ptc_password = os.environ.get('PTC_PASSWORD', "Invalid")
-        login_type = "ptc"
-        if not API.login(login_type, ptc_username, ptc_password):
-            log.error("[-] Trouble logging in via PTC. Stopping")
-            return False
-    
-    API.get_player()
-    response_dict = API.call()
-    
-    getPoiData(position[0], position[1])
-    return True
+        log.info('[+] Authentication with Google...')
+        if not API.login(login_type, goog_username, goog_password):
+            log.warn('[-] Trouble logging in via Google')
+            log.info('[+] Authentication with PTC...')
+            ptc_username = os.environ.get('PTC_USERNAME', "Invalid")
+            ptc_password = os.environ.get('PTC_PASSWORD', "Invalid")
+            login_type = "ptc"
+            if not API.login(login_type, ptc_username, ptc_password):
+                log.error("[-] Trouble logging in via PTC. Stopping")
+                return False
+        
+        API.get_player()
+        response_dict = API.call()
+        
+        getPoiData(position[0], position[1])
+        return True
+    except Exception as e:
+        log.error("Error login" + str(e));
+        return false
 
 def getPokemons():
     global Pokemons
