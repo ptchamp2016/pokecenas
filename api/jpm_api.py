@@ -252,7 +252,6 @@ def getPoiData(lat, lng):
             fetchSemaphore.release()
 
 def login(location=None):
-    print("login started")
     global API
     global CANCEL_FETCH
     init()
@@ -289,6 +288,7 @@ def login(location=None):
         return false
 
 def getPokemons():
+    log.info("Getting Pokemon: " + len(Pokemons))
     global Pokemons
     try:
         pokeSemaphore.acquire()
@@ -300,6 +300,7 @@ def getPokemons():
     return data
 
 def getLuredStops():
+    log.info("Getting Pokestops: " + len(Pokestops))
     global Pokestops
     try:
         stopSemaphore.acquire()
