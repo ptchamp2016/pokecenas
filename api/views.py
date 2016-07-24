@@ -3,6 +3,7 @@ import datetime
 import json
 import jpm_api
 from django.template.response import TemplateResponse
+from werkzeug.http import http_date
 import os
 
 def json_custom_parser(obj):
@@ -10,15 +11,12 @@ def json_custom_parser(obj):
         dot_ix = 19
         return obj.isoformat()[:dot_ix]
     else:
-        raise TypeError(obj)    
+        raise TypeError(obj)
     
 def load_frontend(request):
     return TemplateResponse(request, 'index.html', context={
         "GMAPS_API_KEY": os.environ.get('GMAPS_API_KEY', "Invalid")
 	})
-
-def load_list(request):
-    return TemplateResponse(request, 'list.html')
 
 def login(request):
     location = request.POST.get('location', "Lisboa, Portugal")

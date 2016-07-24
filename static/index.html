@@ -1,6 +1,8 @@
 <head>
+    <meta id="meta" name="viewport" content="width=device-width; initial-scale=1.0" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
     <link rel="shortcut icon" href="static/favicon/favicon.png"/>
+    <title>JPM Pokémon Map</title>
 </head>
 <style>
     html { height: 100% }
@@ -105,7 +107,7 @@
 
     var updateLabelDiffTime = function() {
         $('.label-countdown').each(function(index, element) {
-            var disappearsAt = new Date(element.getAttribute("disappears-at"));
+            var disappearsAt = new Date(parseInt(element.getAttribute("disappears-at")));
             var now = new Date();
 
             var difference = Math.abs(disappearsAt - now);
@@ -129,52 +131,43 @@
         });
     };
 
-    window.setInterval(updateLabelDiffTime, 1000);
+    window.setInterval(updateLabelDiffTime, 1000);  
+
+    function addMinutes(date, minutes) {
+       return new Date(date.getTime() + minutes*60000);
+    }
 
     function add_pokemon(data) {
         data.uid = data.key;
         data.ico = '/static/poke/' + data.id + '.png';
         data.position = new google.maps.LatLng(data.latitude, data.longitude);
-
-        if(pokes[data.uid] !== undefined){
-            var p = pokes[data.uid];
-            if(p.data.latitude !== data.latitude || p.data.latitude !== data.longitude){
-                p.marker.setPosition(data.position);
-                p.data.latitude = data.latitude;
-                p.data.longitude = data.longitude;
-                console.log("pokemon '" + data.name + "' moved!", p);
-            }
-            return;
-        }
         
         var marker = add_marker(data);
-        var listener = google.maps.event.addListener(marker, 'click', (function(marker, uid) {
-            var infoWindow = new google.maps.InfoWindow();
-            return function() {
-                var p = pokes[uid];
-                infoWindow.setContent( pokemonLabel(p.data.name, p.data.hides_at, p.data.distance));
-                infoWindow.open(map, marker);
-                setTimeout(function(){
-                    infoWindow.close();
-                }, 10000);
-            }
-        })(marker, data.uid));
+
+        marker.infoWindow = new google.maps.InfoWindow({
+            content: pokemonLabel(data.name, data.hides_at, data.distance)
+        });
+
+        var listener = marker.addListener('click', function() {
+            marker.infoWindow.open(map, marker);
+            updateLabelDiffTime();
+        });
         
         var timeLeft = parseInt(data.time_left);
         var pokemon = {marker:marker, listener:listener, data:data};
         
         setTimeout(function(){
             clear_pokemon(pokemon);	
-        }, timeLeft * 1000);
+        }, timeLeft);
         pokes[data.uid] = pokemon;        
     }
 
     function pokemonLabel(name, disappear_time, distance) {
-        disappear_date = new Date(disappear_time)
+        var disappear_date = new Date(disappear_time);
 
         var contentstring = `
             <div>
-                <h3>${name}</h3>
+                <b>${name}</b>
             </div>
             <div>
                 Disappears at ${pad(disappear_date.getHours())}:${pad(disappear_date.getMinutes())}:${pad(disappear_date.getSeconds())}
@@ -183,6 +176,7 @@
             <div>
                 Is at ${distance} m from you
             </div>`;
+
         return contentstring;
     }
 
@@ -199,47 +193,44 @@
 
         var marker = add_marker(data);
 
-        var listener = google.maps.event.addListener(marker, 'click', (function(marker, uid) {
-            var infoWindow = new google.maps.InfoWindow();
-            return function() {
-                var s = stops[uid];
-                infoWindow.setContent( pokestopLabel(s.data.last_modified, s.data.pokemon_name));
-                infoWindow.open(map, marker);
-                setTimeout(function(){
-                    infoWindow.close();
-                }, 10000);
-            }
-        })(marker, data.uid));
+        marker.infoWindow = new google.maps.InfoWindow({
+            content: pokestopLabel(data.last_modified, data.pokemon_name)
+        });
 
-        var time_until_expire = new Date().getTime() - new Date(data.last_modified).getTime();
+        var listener = marker.addListener('click', function() {
+            marker.infoWindow.open(map, marker);
+            updateLabelDiffTime();
+        });
+
+        var time_until_expire = addMinutes(new Date(data.last_modified), 30).getTime() - new Date().getTime();
 
         var stop = {marker:marker, listener:listener, data:data};
         setTimeout(function(){
             clear_pokestop(stop);	
-        }, time_until_expire * 1000);
+        }, time_until_expire);
         stops[data.uid] = stop;
     }
 
     function pokestopLabel(last_modified, pokemon, latitude, longitude) {
-        var str;
 
         var last_modified_date = new Date(last_modified);
         var current_date = new Date();
-
-        var time_until_expire = current_date.getTime() - last_modified_date.getTime();
+        
+        var time_until_expire = addMinutes(last_modified_date, 30).getTime() - current_date.getTime();
 
         var expire_date = new Date(current_date.getTime() + time_until_expire);
+        var expire_time = expire_date.getTime();
 
         str = `
             <div>
-                <h3>Lured Pokéstop</h3>
+                <b>Lured Pokéstop</b>
             </div>
             <div>
                 Lured Pokémon: <b>${pokemon}</b>
             </div>
             <div>
                 Lure expires at ${pad(expire_date.getHours())}:${pad(expire_date.getMinutes())}:${pad(expire_date.getSeconds())}
-                <span class='label-countdown' disappears-at='${expire_date}'>(00m00s)</span></div>
+                <span class='label-countdown' disappears-at='${expire_time}'>(00m00s)</span></div>
             <div>`;
 
         return str;
@@ -265,6 +256,7 @@
     }
 
     function requestLogin(location) {
+        clear_markers();
         var loc = location.coords.latitude.toString()+', '+location.coords.longitude.toString();
         $.ajax({ 
             type: 'POST', 
@@ -277,6 +269,7 @@
                 userLogged = true;
                 setTimeout(function(){
                     getPokemons();
+                    getPokestops();
                 }, 10000);
             },
             error: function(e) {
@@ -297,7 +290,9 @@
             success: function (data) {
                 var count = data ? data.data.length : 0;
                 $.each(data.data, function(k, v) {
-                    add_pokemon(v);
+                    if(!(v.key in pokes)) {
+                        add_pokemon(v);
+                    }
                 });
                 if (count > 0) {
                     info("Added " + count + " pokémon!");
@@ -324,11 +319,19 @@
             dataType: 'json',
             success: function (data) {
                 $.each(data.data, function(k, v) {
-                    add_pokestop(v);
+                    if(!(v.key in stops)) {
+                        add_pokestop(v);
+                    } else {
+                        var pokestop = stops[v.key].data;
+                        if(pokestop.pokemon_name != v.pokemon_name) {
+                            clear_pokestop(stops[v.key]);
+                            add_pokestop(v);
+                        }
+                    }
                 });
             },
             error: function(e) {
-                error('Error while fetching Pokéstops');
+                error('Error while fetching Pokestops');
                 setTimeout(function(){
                     hide_message();
                 }, 3000);
@@ -378,9 +381,7 @@
             var position = map.getCenter();
             loc = position.lat().toString()+', '+position.lng().toString();
         }
-
-        getPokemons();
-        getPokestops();
+        info();
         $.ajax({ 
             type: 'POST', 
             url: '/updateScan', 
@@ -391,6 +392,7 @@
             success: function (data) {
                 setTimeout(function(){
                     getPokemons();
+                    getPokestops();
                 }, 10000);
             },
             error: function(e) {
@@ -435,6 +437,8 @@
         var position = new google.maps.LatLng(location.coords.latitude, location.coords.longitude);
         if(map == null){
             build_initial_map(location);
+        } else {
+            getNewData();
         }
         if(player === null) {
             player = add_player(position);

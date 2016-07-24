@@ -8,6 +8,7 @@ import requests
 import logging
 import threading
 import math
+import calendar
 
 from threading import Thread
 
@@ -33,6 +34,7 @@ meters_per_degree = 111111
 lat_gap_degrees = float(lat_gap_meters) / meters_per_degree
 pokeSemaphore = threading.BoundedSemaphore()
 stopSemaphore = threading.BoundedSemaphore()
+fetchSemaphore = threading.BoundedSemaphore()
 
 log = logging.getLogger(__name__)
 
@@ -163,12 +165,18 @@ def getPoiData(lat, lng):
     CANCEL_FETCH = False
 
     if(FETCHING_DATA is False):
-        FETCHING_DATA = True
+        try:
+            fetchSemaphore.acquire()
+            FETCHING_DATA = True
+        finally:
+            fetchSemaphore.release()
+        
         log.info('[+] getting Data')
         Pokemons = []
         Pokestops = []
         poi = {'pokemons': {}, 'forts': {}}
-        num_steps = 8
+        num_steps = 10
+        total_steps = (3 * (num_steps**2)) - (3 * num_steps) + 1
         origin = LatLng.from_degrees(lat, lng)
 
         coords = []
@@ -198,8 +206,8 @@ def getPoiData(lat, lng):
                                                             "name": POKEMON_DATA[pokemon['pokemon_data']['pokemon_id'] - 1]['Name'],
                                                             "latitude": pokemon['latitude'],
                                                             "longitude": pokemon['longitude'],
-                                                            "time_left": pokemon['time_till_hidden_ms']/1000,
-                                                            "hides_at": d_t,
+                                                            "time_left": pokemon['time_till_hidden_ms'],
+                                                            "hides_at": pokemon['last_modified_timestamp_ms'] + pokemon['time_till_hidden_ms'],
                                                             "distance": int(origin.get_distance(pos).radians * 6366468.241830914)
                                                         })
                                                     finally:
@@ -208,10 +216,6 @@ def getPoiData(lat, lng):
                                         if 'forts' in map_cell:
                                             for pokestop in map_cell['forts']:
                                                 if pokestop.get('type') == 1 and 'lure_info' in pokestop:  # Pokestops with lure
-                                                    expire_timestamp = pokestop['lure_info']['lure_expires_timestamp_ms'] / 1000.0
-                                                    modified_timestamp = pokestop['last_modified_timestamp_ms'] / 1000.0
-                                                    lure_expiration = datetime.utcfromtimestamp(expire_timestamp)
-                                                    modified = datetime.utcfromtimestamp(modified_timestamp)
                                                     active_pokemon_id = pokestop['lure_info']['active_pokemon_id']
                                                     if(pokestop['id'] not in poi['forts']):
                                                         try:
@@ -221,8 +225,7 @@ def getPoiData(lat, lng):
                                                                 "pokemon_name": POKEMON_DATA[active_pokemon_id - 1]['Name'],
                                                                 "latitude": pokestop['latitude'],
                                                                 "longitude": pokestop['longitude'],
-                                                                "lure_expiration": lure_expiration,
-                                                                "last_modified": modified
+                                                                "last_modified": pokestop['last_modified_timestamp_ms']
                                                             })
                                                         finally:
                                                             stopSemaphore.release()
@@ -236,13 +239,17 @@ def getPoiData(lat, lng):
                                 failed_consecutive = 0
                     else:
                         log.warn('Fetch poi data failed. Going again')
+                log.info('Completed {:5.2f}% of scan.'.format(float(step) / total_steps*100))
                 time.sleep(0.20)
             else:
                 log.info('Canceling Scan to start another')
                 Pokemons = []
                 break
-        
-        FETCHING_DATA = False
+        try:
+            fetchSemaphore.acquire()
+            FETCHING_DATA = False
+        finally:
+            fetchSemaphore.release()
 
 def login(location=None):
     global API
@@ -300,8 +307,13 @@ def getLuredStops():
 
 def hasMoreData():
     global FETCHING_DATA
-    
-    return FETCHING_DATA
+    result = False
+    try:
+        fetchSemaphore.acquire()
+        result = FETCHING_DATA
+    finally:
+        fetchSemaphore.release()
+    return result is True
 
 def rescan(location=None):
     log.info("Rescaning")
