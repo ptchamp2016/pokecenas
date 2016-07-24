@@ -1,7 +1,7 @@
 <head>
     <meta id="meta" name="viewport" content="width=device-width; initial-scale=1.0" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-    <link rel="shortcut icon" href="static/favicon/favicon.png"/>
+    <link rel="shortcut icon" href="static/site/favicon.png"/>
     <title>JPM Pokémon Map</title>
 </head>
 <style>
@@ -15,6 +15,7 @@
         height: 100%;
     }
     #loader{
+        top: 10px;
         display:none;
         left:50%;
         transform: translateX(-50%);
@@ -30,44 +31,119 @@
         background-color:#F00;
         color:white;
     }
-    #control_panel, #loader{
-        z-index: 999;
+    #loader{
+        z-index: 997;
         position:fixed;
         font-family: SANS-SERIF;
         background-color: #fff;
         border-radius:10px;
-        padding: 20px;
+        padding: 15px;
+        opacity: .7;
+    }
+    #top_bar {
+        z-index: 998;
+        position:fixed;
+        font-family: SANS-SERIF;
+        background-color: #fff;
+        border-radius:10px;
+        padding: 10px;
         opacity: .6;
+        left: 10px;
+        top: 10px;
     }
-    #control_panel{
-        width:150px;
-        left:15px;
-        bottom:15px;
+    .sidenav {
+        height: 100%;
+        width: 0;
+        position: fixed;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        background-color: #111;
+        overflow-x: hidden;
+        transition: 0.5s;
     }
-    #control_panel.mylocation .auto-search{
-        display:block;
-    }
-    #control_panel.mapcenter .manual-search{
-        display:block;
-    }
-</style>
 
-<div id="loader">
-    Please wait... searching for pokemon.
-</div>
-<div id="control_panel">
-    <div class="manual-search">
-        <button id="update">Refresh</button>
-        <button id="manual_search">Search</button>
+    .sidenav #control_panel {
+        padding: 12px 12px 12px 12px;
+        text-decoration: none;
+        font-size: 16px;
+        color: #818181;
+        display: block;
+        font-family: SANS-SERIF;
+    }
+
+    .sidenav a:hover, .offcanvas a:focus{
+        color: #f1f1f1;
+    }
+
+    #main {
+        transition: margin-left .5s;
+    }
+
+    @media screen and (max-height: 450px) {
+        .sidenav {padding-top: 15px;}
+        .sidenav a {font-size: 18px;}
+    }
+
+    .toggle-button { background-color: white; margin: 5px 0; border-radius: 20px; border: 2px solid #D0D0D0; height: 24px; cursor: pointer; width: 50px; position: relative; display: inline-block; user-select: none; -webkit-user-select: none; -ms-user-select: none; -moz-user-select: none; 
+    float: right; clear: none; margin: 2px 0 0 2px;}
+    .toggle-button button { cursor: pointer; outline: 0; display:block; position: absolute; left: 0; top: 0; border-radius: 100%; width: 30px; height: 30px; background-color: white; float: left; margin: -3px 0 0 -3px; border: 2px solid #D0D0D0; transition: left 0.3s; }
+    .toggle-button-selected { background-color: #83B152; border: 2px solid #7DA652; }
+    .toggle-button-selected button { left: 26px; top: 0; margin: 0; border: none; width: 24px; height: 24px; box-shadow: 0 0 4px rgba(0,0,0,0.1); }
+
+    .switch_container {
+        float: left;
+        clear: none;
+        width: 100%;
+        margin-top: 12px;
+    }
+
+    .switch_container label {
+        float: left;
+        clear: none;
+        display: block;
+        padding: 8px 1em 0 0;
+    }
+
+</style>
+<div id="mySidenav" class="sidenav">
+    <div id="control_panel">
+        <strong>Search by:</strong><br/>
+        <input type="radio" name="searchType" value="mylocation" checked style="margin-top: 12px"/> My Location<br/>
+        <input type="radio" name="searchType" value="mapcenter" style="margin-top: 12px"/> Map Center<br/>
         <br>
         <br>
+        <strong>Filters:</strong><br/>
+        <div class="switch_container">
+            <div class="toggle-button toggle-button-selected" id="show_pokemon_switch">
+                <button id="show_pokemon"></button>
+            </div>
+            <label for="show_pokemon">Pokémon</label>
+        </div>
+        <div class="switch_container">
+            <div class="toggle-button toggle-button-selected" id="show_pokestops_switch">
+                <button id="show_pokestops"></button>
+            </div>
+            <label for="show_pokestops">Pokestops</label>
+        </div>
+        <br>
+        <br>
+        <strong>List:</strong><br/>
     </div>
-    <strong>Search by:</strong><br/>
-    <input type="radio" name="searchType" value="mylocation" checked/> My Location<br/>
-    <input type="radio" name="searchType" value="mapcenter"/> Map Center<br/>
 </div>
-<div id="map_wrapper">
-    <div id="map_canvas" class="mapping">Detecting location...</div>
+
+<div id="main">
+    <div id="loader">
+        Please wait... searching for pokemon.
+    </div>
+    <div id="top_bar">
+        <img id="menu_toggle" src="static/site/menu-alt-64.png" width="30" height="30">
+        <img id="refresh" src="static/site/reload.png" width="30" height="30" hspace="10">
+        <img id="search" src="static/site/search.png" width="30" height="30">
+    </div>
+    <div id="map_wrapper">
+        <div id="map_canvas" class="mapping">Detecting location...</div>
+    </div>
 </div>
 <script>
     var player = null;
@@ -79,6 +155,9 @@
     var stops = {};
     var mode = null;
     var pad = function (number) { return number <= 99 ? ("0" + number).slice(-2) : number; }
+    var menuOpen = false;
+    var showPokemon = true;
+    var showPokestop = true;
 
     jQuery(function($) {
         var script = document.createElement('script');
@@ -87,12 +166,35 @@
         $("[name='searchType']").on('change', function(){
             update_mode();
         });
-        $("#manual_search").on('click', function(){
+        $("#search").on('click', function(){
             getNewData();
         });
-        $("#update").on('click', function(){
+        $("#refresh").on('click', function(){
             getPokemons();
             getPokestops();
+        });
+        $(".toggle-button").on('click', function() {
+            $(this).toggleClass('toggle-button-selected'); 
+            if($(this).attr('id') == "show_pokemon_switch") {
+                showPokemon = !showPokemon;
+                showHidePokemon(showPokemon);
+            } else {
+                showPokestop = !showPokestop;
+                showHidePokestops(showPokestop);
+            }
+        });
+        $("#menu_toggle").on('click', function(){
+            if(!menuOpen) {
+                $("#mySidenav").width('250px');
+                $("#main").css('margin-left','250px');
+                $("#top_bar").animate({"left":"260px"});
+                menuOpen = true;
+            } else {
+                $("#mySidenav").width('0');
+                $("#main").css('margin-left','0');
+                $("#top_bar").animate({"left":"10px"}, "0.5", "linear");
+                menuOpen = false;
+            }
         });
         
         update_mode();
@@ -100,7 +202,6 @@
 
     function update_mode(){
         mode = $("[name='searchType']:checked").val();
-        $("#control_panel").removeClass("mylocation").removeClass("mapcenter").addClass(mode);
     }
 
     var updateLabelDiffTime = function() {
@@ -141,6 +242,10 @@
         data.position = new google.maps.LatLng(data.latitude, data.longitude);
         
         var marker = add_marker(data);
+
+        if(!showPokemon) {
+            marker.setVisible(false);
+        }
 
         marker.infoWindow = new google.maps.InfoWindow({
             content: pokemonLabel(data.name, data.hides_at, data.distance)
@@ -191,6 +296,10 @@
 
         var marker = add_marker(data);
 
+        if(!showPokestop) {
+            marker.setVisible(false);
+        }
+
         marker.infoWindow = new google.maps.InfoWindow({
             content: pokestopLabel(data.last_modified, data.pokemon_name)
         });
@@ -238,6 +347,28 @@
         google.maps.event.removeListener(pokestop.listener);
         pokestop.marker.setMap(null);
         delete stops[pokestop.data.uid];
+    }
+
+    function showHidePokemon(show) {
+        var keys = Object.keys(pokes);
+        for (var i = 0; i < keys.length; i++) {
+            if(show) {
+                pokes[keys[i]].marker.setVisible(true);
+            } else {
+                pokes[keys[i]].marker.setVisible(false);
+            }
+        }
+    }
+
+    function showHidePokestops(show) {
+        var keys = Object.keys(stops);
+        for (var i = 0; i < keys.length; i++) {
+            if(show) {
+                stops[keys[i]].marker.setVisible(true);
+            } else {
+                stops[keys[i]].marker.setVisible(false);
+            }
+        }
     }
 
     function clear_markers() {
