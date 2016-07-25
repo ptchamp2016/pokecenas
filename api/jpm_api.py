@@ -186,7 +186,7 @@ def getPoiData(lat, lng):
         Pokemons = []
         Pokestops = []
         poi = {'pokemons': {}, 'forts': {}}
-        num_steps = 6
+        num_steps = 8
         total_steps = (3 * (num_steps**2)) - (3 * num_steps) + 1
         origin = LatLng.from_degrees(lat, lng)
 
