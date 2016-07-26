@@ -57,6 +57,8 @@
         left: -220px;
         background-color: #111;
         transition: 0.4s;
+        display: flex;
+        flex-flow: column;
     }
 
     .sidenav #control_panel {
@@ -68,23 +70,46 @@
     }
 
     .sidenav #legend {
-        overflow: scroll;
+        overflow: auto;
         height: 100%;
     }
 
-    #legend ul {
+    #legend-list {
         list-style: none;
         padding: 8px;
         margin-top:0px;
-        margin-bottom:200px;
+        margin-bottom:300px;
     }
 
-    #legend ul li {
+    #legend-list li {
         list-style: none;
         text-decoration: none;
-        color: #818181;
+        color: #FFFFFF;
+        font-size: 16px;
         font-family: SANS-SERIF;
         padding: 0px 0px 8px 0px;
+        display: inline-block;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        float: left;
+        clear: none;
+        width: 100%;
+    }
+
+    #legend-list li label {
+        float: left;
+        clear: none;
+        display: block;
+        padding: 4px 1em 0 0;
+    }
+
+    input[type='checkbox'] {
+        width:24px;
+        height:24px;
+        background:white;
+        border-radius:5px;
+        border:2px solid #555;
+        float: right;
     }
 
     .sidenav a:hover, .offcanvas a:focus{
@@ -137,36 +162,10 @@
             <label for="show_pokestops">Pokestops</label>
         </div>
         <strong>List/Ignore:</strong><br/><br/>
-        <div id="legend">
-            <ul>
-    <li><input type="checkbox"> checkbox 1</li>
-    <li><input type="checkbox"> checkbox 2</li>
-    <li><input type="checkbox"> checkbox 3</li>
-    <li><input type="checkbox"> checkbox 4</li>
-    <li><input type="checkbox"> checkbox 1</li>
-    <li><input type="checkbox"> checkbox 2</li>
-    <li><input type="checkbox"> checkbox 3</li>
-    <li><input type="checkbox"> checkbox 4</li>
-    <li><input type="checkbox"> checkbox 1</li>
-    <li><input type="checkbox"> checkbox 2</li>
-    <li><input type="checkbox"> checkbox 3</li>
-    <li><input type="checkbox"> checkbox 4</li>
-    <li><input type="checkbox"> checkbox 1</li>
-    <li><input type="checkbox"> checkbox 2</li>
-    <li><input type="checkbox"> checkbox 3</li>
-    <li><input type="checkbox"> checkbox 4</li>
-    <li><input type="checkbox"> checkbox 1</li>
-    <li><input type="checkbox"> checkbox 2</li>
-    <li><input type="checkbox"> checkbox 3</li>
-    <li><input type="checkbox"> checkbox 4</li>
-    <li><input type="checkbox"> checkbox 1</li>
-    <li><input type="checkbox"> checkbox 2</li>
-    <li><input type="checkbox"> checkbox 3</li>
-    <li><input type="checkbox"> checkbox 4</li>
-
-  </ul>
-
-        </div>
+        
+    </div>
+    <div id="legend">
+        <ul id="legend-list"></ul>
     </div>
 </div>
 
@@ -197,6 +196,8 @@
     var showPokemon = true;
     var showPokestop = true;
     var playerLocation = null;
+    var list = {};
+    var ignored = {};
 
     jQuery(function($) {
         var script = document.createElement('script');
@@ -221,7 +222,12 @@
             getNewData();
         });
         $("#center_me").on('click', function(){
-            map.setCenter(new google.maps.LatLng(playerLocation.coords.latitude, playerLocation.coords.longitude));
+            navigator.geolocation.getCurrentPosition(function() {
+                map.setCenter(new google.maps.LatLng(playerLocation.coords.latitude, playerLocation.coords.longitude));
+            },
+            function(){
+                console.log("failed to get gps location....");
+            });
         });
         $(".toggle-button").on('click', function() {
             $(this).toggleClass('toggle-button-selected'); 
@@ -240,6 +246,15 @@
         }
         if(localStorage.getItem("showPokestop") !== 'undefined' && localStorage.getItem("showPokestop") === "false") {
             $("#show_pokestops_switch").click();
+        }
+        if(localStorage.getItem("ignored") !== 'undefined') {
+            var ign = JSON.parse(localStorage.getItem("ignored"));
+            for(var key in ign){
+                if (ign.hasOwnProperty(key)){
+                    var value=ign[key];
+                    ignored[key] = value;
+                }
+            }
         }
     });
 
@@ -301,7 +316,44 @@
         setTimeout(function(){
             clear_pokemon(pokemon);	
         }, timeLeft);
-        pokes[data.uid] = pokemon;        
+        pokes[data.uid] = pokemon;
+        
+        var ignore = false;
+        if(ignored[data.name] !== undefined) {
+            ignore = ignored[data.name];
+            if(ignore) {
+                marker.setVisible(false);
+            }
+        }
+        if(list[data.name] === undefined) {
+            var checked = ignore ? "checked": "";
+            var content = [];
+            list[data.name] = checked;
+            content.push("<li><input type='checkbox' id='" + data.name +  "'" +
+            " onclick='ignore(this.checked, this.id)' "+checked+"\/>" +
+            "<label for='" + data.name +  "'>" + data.name + "</label></li>");
+            $("#legend-list").append(content);
+        }
+    }
+
+    function ignore(checked, name) {
+        ignored[name] = checked;
+        localStorage.setItem("ignored", JSON.stringify(ignored));
+        if(checked) {
+            var keys = Object.keys(pokes);
+            for (var i = 0; i < keys.length; i++) {
+                if(pokes[keys[i]].data.name === name) {
+                    pokes[keys[i]].marker.setVisible(false);
+                }
+            }
+        } else if(showPokemon) {
+            var keys = Object.keys(pokes);
+            for (var i = 0; i < keys.length; i++) {
+                if(pokes[keys[i]].data.name === name) {
+                    pokes[keys[i]].marker.setVisible(true);
+                }
+            }
+        }
     }
 
     function pokemonLabel(name, disappear_time, distance) {
@@ -392,7 +444,10 @@
         var keys = Object.keys(pokes);
         for (var i = 0; i < keys.length; i++) {
             if(show) {
-                pokes[keys[i]].marker.setVisible(true);
+                var name = pokes[keys[i]].data.name;
+                if(ignored[name] === undefined || ignored[name] === false) {
+                    pokes[keys[i]].marker.setVisible(true);
+                }
             } else {
                 pokes[keys[i]].marker.setVisible(false);
             }
