@@ -1,11 +1,11 @@
 {
   "env": {
     "IS_HEROKU_SERVER": "1",
-    "GMAPS_API_KEY": "AIzaSyBlbg7jyWthMOt9Liasndl34FZh5nwyEJw",
-    "PTC_USERNAME": "greeneyesboy",
-    "PTC_PASSWORD": "CenasMaradas",
-    "GOOG_USERNAME": "champ2016pt",
-    "GOOG_PASSWORD": "CenasMaradas"
+    "GMAPS_API_KEY": "GMAPS_API_KEY",
+    "PTC_USERNAME": "PTC_USERNAME",
+    "PTC_PASSWORD": "PTC_PASSWORD",
+    "GOOG_USERNAME": "GOOG_USERNAME",
+    "GOOG_PASSWORD": "GOOG_PASSWORD"
   },
   "addons": [
     "papertrail"
