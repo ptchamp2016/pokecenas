@@ -56,7 +56,6 @@
         top: 0;
         left: -220px;
         background-color: #111;
-        overflow-x: hidden;
         transition: 0.4s;
     }
 
@@ -66,6 +65,25 @@
         font-size: 16px;
         color: #818181;
         font-family: SANS-SERIF;
+    }
+
+    .sidenav #legend {
+        overflow: scroll;
+        height: 100%;
+    }
+
+    #legend ul {
+        list-style: none;
+        padding: 8px;
+        margin-top:0px;
+    }
+
+    #legend ul li {
+        list-style: none;
+        text-decoration: none;
+        color: #818181;
+        font-family: SANS-SERIF;
+        padding: 0px 0px 8px 0px;
     }
 
     .sidenav a:hover, .offcanvas a:focus{
@@ -81,11 +99,11 @@
         .sidenav a {font-size: 18px;}
     }
 
-    .toggle-button { background-color: white; margin: 5px 0; border-radius: 20px; border: 2px solid #D0D0D0; height: 24px; cursor: pointer; width: 50px; position: relative; display: inline-block; user-select: none; -webkit-user-select: none; -ms-user-select: none; -moz-user-select: none; 
+    .toggle-button { background-color: white; margin: 5px 0; border-radius: 20px; border: 2px solid #D0D0D0; height: 16px; cursor: pointer; width: 33px; position: relative; display: inline-block; user-select: none; -webkit-user-select: none; -ms-user-select: none; -moz-user-select: none; 
     float: right; clear: none; margin: 2px 0 0 2px;}
-    .toggle-button button { cursor: pointer; outline: 0; display:block; position: absolute; left: 0; top: 0; border-radius: 100%; width: 30px; height: 30px; background-color: white; float: left; margin: -3px 0 0 -3px; border: 2px solid #D0D0D0; transition: left 0.3s; }
+    .toggle-button button { cursor: pointer; outline: 0; display:block; position: absolute; left: 0; top: 0; border-radius: 100%; width: 20px; height: 20px; background-color: white; float: left; margin: -2px 0 0 -2px; border: 2px solid #D0D0D0; transition: left 0.3s; }
     .toggle-button-selected { background-color: #83B152; border: 2px solid #7DA652; }
-    .toggle-button-selected button { left: 26px; top: 0; margin: 0; border: none; width: 24px; height: 24px; box-shadow: 0 0 4px rgba(0,0,0,0.1); }
+    .toggle-button-selected button { left: 17px; top: 0; margin: 0; border: none; width: 16px; height: 16px; box-shadow: 0 0 3px rgba(0,0,0,0.1); }
 
     .switch_container {
         float: left;
@@ -98,7 +116,7 @@
         float: left;
         clear: none;
         display: block;
-        padding: 8px 1em 0 0;
+        padding: 4px 1em 0 0;
     }
 
 </style>
@@ -117,7 +135,37 @@
             </div>
             <label for="show_pokestops">Pokestops</label>
         </div>
-        <strong>List:</strong><br/>
+        <strong>List/Ignore:</strong><br/><br/>
+        <div id="legend">
+            <ul>
+    <li><input type="checkbox"> checkbox 1</li>
+    <li><input type="checkbox"> checkbox 2</li>
+    <li><input type="checkbox"> checkbox 3</li>
+    <li><input type="checkbox"> checkbox 4</li>
+    <li><input type="checkbox"> checkbox 1</li>
+    <li><input type="checkbox"> checkbox 2</li>
+    <li><input type="checkbox"> checkbox 3</li>
+    <li><input type="checkbox"> checkbox 4</li>
+    <li><input type="checkbox"> checkbox 1</li>
+    <li><input type="checkbox"> checkbox 2</li>
+    <li><input type="checkbox"> checkbox 3</li>
+    <li><input type="checkbox"> checkbox 4</li>
+    <li><input type="checkbox"> checkbox 1</li>
+    <li><input type="checkbox"> checkbox 2</li>
+    <li><input type="checkbox"> checkbox 3</li>
+    <li><input type="checkbox"> checkbox 4</li>
+    <li><input type="checkbox"> checkbox 1</li>
+    <li><input type="checkbox"> checkbox 2</li>
+    <li><input type="checkbox"> checkbox 3</li>
+    <li><input type="checkbox"> checkbox 4</li>
+    <li><input type="checkbox"> checkbox 1</li>
+    <li><input type="checkbox"> checkbox 2</li>
+    <li><input type="checkbox"> checkbox 3</li>
+    <li><input type="checkbox"> checkbox 4</li>
+
+  </ul>
+
+        </div>
     </div>
 </div>
 
@@ -178,12 +226,20 @@
             $(this).toggleClass('toggle-button-selected'); 
             if($(this).attr('id') == "show_pokemon_switch") {
                 showPokemon = !showPokemon;
+                localStorage.setItem("showPokemon", showPokemon);
                 showHidePokemon(showPokemon);
             } else {
                 showPokestop = !showPokestop;
+                localStorage.setItem("showPokestop", showPokestop);
                 showHidePokestops(showPokestop);
             }
         });
+        if(localStorage.getItem("showPokemon") !== 'undefined' && localStorage.getItem("showPokemon") === "false") {
+            $("#show_pokemon_switch").click();
+        }
+        if(localStorage.getItem("showPokestop") !== 'undefined' && localStorage.getItem("showPokestop") === "false") {
+            $("#show_pokestops_switch").click();
+        }
     });
 
     var updateLabelDiffTime = function() {
@@ -259,7 +315,7 @@
                 <span class='label-countdown' disappears-at='${disappear_time}'>(00m00s)</span>
             </div>
             <div>
-                Is at ${distance} m from you
+                Is at ${distance} m
             </div>`;
 
         return contentstring;
